@@ -1,0 +1,16 @@
+{
+  "name": "gan-image-studio",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "provision:supabase": "tsx scripts/provision-supabase.ts",
+    "verify:supabase": "tsx scripts/verify-supabase.ts",
+    "typecheck:scripts": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.8.0"
+  }
+}
