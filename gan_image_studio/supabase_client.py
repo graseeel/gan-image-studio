@@ -20,13 +20,21 @@ class SupabaseSettings:
         return bool(self.url and self.anon_key)
 
 
+@dataclass(frozen=True)
+class AuthSession:
+    access_token: str
+    refresh_token: str
+    user_id: str
+
+
 class SupabaseGateway:
-    def __init__(self, settings: SupabaseSettings) -> None:
+    def __init__(self, settings: SupabaseSettings, session: AuthSession | None = None) -> None:
         if not settings.enabled:
             raise ValueError("Supabase URL and anon key are required")
         from supabase import create_client
 
         self.settings = settings
+        self.session = session
         self.user_client = create_client(settings.url, settings.anon_key)
         self.service_client = (
             create_client(settings.url, settings.service_role_key)
@@ -37,16 +45,24 @@ class SupabaseGateway:
         self.service_artifacts: ArtifactStore | None = (
             SupabaseArtifactStore(self.service_client) if self.service_client else None
         )
+        if session is not None:
+            self.user_client.auth.set_session(session.access_token, session.refresh_token)
 
-    def sign_in(self, email: str, password: str) -> str:
+    def sign_in(self, email: str, password: str) -> AuthSession:
         response = self.user_client.auth.sign_in_with_password(
             {"email": email, "password": password}
         )
         if response.session is None:
             raise PermissionError("Supabase did not return a session")
-        return response.session.access_token
+        return AuthSession(
+            access_token=response.session.access_token,
+            refresh_token=response.session.refresh_token,
+            user_id=str(response.session.user.id),
+        )
 
     def current_user_id(self) -> str:
+        if self.session is not None:
+            return self.session.user_id
         response = self.user_client.auth.get_user()
         if response.user is None:
             raise PermissionError("sign in before accessing user data")

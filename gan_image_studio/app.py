@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any
 
 import gradio as gr
 import torch
@@ -14,7 +13,7 @@ from gan_image_studio.inference import (
     load_generator_from_checkpoint,
 )
 from gan_image_studio.plotting import save_image_grid
-from gan_image_studio.supabase_client import SupabaseGateway, SupabaseSettings
+from gan_image_studio.supabase_client import AuthSession, SupabaseGateway, SupabaseSettings
 from gan_image_studio.utils import ensure_directory
 
 
@@ -23,7 +22,7 @@ def _checkpoint_choices() -> list[str]:
     return [str(path) for path in sorted(checkpoint_dir.glob("*.pt"))]
 
 
-def _gateway() -> SupabaseGateway | None:
+def _gateway(session: AuthSession | None = None) -> SupabaseGateway | None:
     url = os.getenv("SUPABASE_URL", "")
     anon_key = os.getenv("SUPABASE_ANON_KEY", "")
     if not url or not anon_key:
@@ -33,8 +32,18 @@ def _gateway() -> SupabaseGateway | None:
             url=url,
             anon_key=anon_key,
             service_role_key=os.getenv("SUPABASE_SERVICE_ROLE_KEY") or None,
-        )
+        ),
+        session=session,
     )
+
+
+def _require_gateway(session: AuthSession | None) -> SupabaseGateway:
+    gateway = _gateway(session)
+    if gateway is None:
+        raise gr.Error("Supabase environment variables are not configured.")
+    if session is None:
+        raise gr.Error("Sign in before using this action.")
+    return gateway
 
 
 def _generate(checkpoint_path: str, seed: int, count: int) -> str:
@@ -69,18 +78,16 @@ def _interpolate(checkpoint_path: str, start_seed: int, end_seed: int, steps: in
     return str(output_path)
 
 
-def _sign_in(email: str, password: str) -> str:
+def _sign_in(email: str, password: str) -> tuple[str, AuthSession]:
     gateway = _gateway()
     if gateway is None:
         raise gr.Error("Supabase environment variables are not configured.")
-    gateway.sign_in(email, password)
-    return "signed in"
+    session = gateway.sign_in(email, password)
+    return "signed in", session
 
 
-def _history() -> list[list[str]]:
-    gateway = _gateway()
-    if gateway is None:
-        return []
+def _history(session: AuthSession | None) -> list[list[str]]:
+    gateway = _require_gateway(session)
     rows = gateway.list_generation_history()
     return [
         [
@@ -94,12 +101,15 @@ def _history() -> list[list[str]]:
     ]
 
 
-def _save_generation(grid_path: str, seed: int, count: int) -> str:
+def _save_generation(
+    grid_path: str,
+    seed: int,
+    count: int,
+    session: AuthSession | None,
+) -> str:
     if not grid_path:
         raise gr.Error("Generate a grid first.")
-    gateway = _gateway()
-    if gateway is None:
-        raise gr.Error("Supabase environment variables are not configured.")
+    gateway = _require_gateway(session)
     user_id = gateway.current_user_id()
     remote_path = gateway.upload_generated_grid(Path(grid_path), user_id)
     row = gateway.save_generation_record(
@@ -114,17 +124,19 @@ def _save_generation(grid_path: str, seed: int, count: int) -> str:
     return str(row["id"])
 
 
-def _favorite_generation(generation_id: str) -> str:
+def _favorite_generation(generation_id: str, session: AuthSession | None) -> str:
     if not generation_id:
         raise gr.Error("Provide a generation id.")
-    gateway = _gateway()
-    if gateway is None:
-        raise gr.Error("Supabase environment variables are not configured.")
+    gateway = _require_gateway(session)
     gateway.favorite_generation(generation_id)
     return "favorited"
 
 
-def _checkpoint_info(checkpoint_path: str) -> dict[str, Any]:
+def _download_path(path: str | None) -> str | None:
+    return path
+
+
+def _checkpoint_info(checkpoint_path: str) -> dict[str, object]:
     if not checkpoint_path:
         raise gr.Error("Select a checkpoint first.")
     checkpoint = load_checkpoint(Path(checkpoint_path))
@@ -139,11 +151,16 @@ def _checkpoint_info(checkpoint_path: str) -> dict[str, Any]:
 def build_demo() -> gr.Blocks:
     with gr.Blocks(title="GAN Image Studio") as demo:
         gr.Markdown("# GAN Image Studio")
+        session_state = gr.State(None)
         with gr.Row():
             email = gr.Textbox(label="Email")
             password = gr.Textbox(label="Password", type="password")
             auth_status = gr.Textbox(label="Auth", interactive=False)
-        gr.Button("Sign in").click(_sign_in, inputs=[email, password], outputs=auth_status)
+        gr.Button("Sign in").click(
+            _sign_in,
+            inputs=[email, password],
+            outputs=[auth_status, session_state],
+        )
 
         with gr.Tab("Generate"):
             checkpoint = gr.Dropdown(label="Checkpoint", choices=_checkpoint_choices())
@@ -155,10 +172,10 @@ def build_demo() -> gr.Blocks:
             gr.Button("Generate").click(_generate, inputs=[checkpoint, seed, count], outputs=output)
             gr.Button("Save generation").click(
                 _save_generation,
-                inputs=[output, seed, count],
+                inputs=[output, seed, count, session_state],
                 outputs=saved_generation,
             )
-            output.change(lambda path: path, inputs=output, outputs=download)
+            output.change(_download_path, inputs=output, outputs=download)
 
         with gr.Tab("Interpolate"):
             interp_checkpoint = gr.Dropdown(label="Checkpoint", choices=_checkpoint_choices())
@@ -172,7 +189,7 @@ def build_demo() -> gr.Blocks:
                 inputs=[interp_checkpoint, start_seed, end_seed, steps],
                 outputs=interp_output,
             )
-            interp_output.change(lambda path: path, inputs=interp_output, outputs=interp_download)
+            interp_output.change(_download_path, inputs=interp_output, outputs=interp_download)
 
         with gr.Tab("History"):
             history = gr.Dataframe(
@@ -181,10 +198,10 @@ def build_demo() -> gr.Blocks:
             )
             favorite_id = gr.Textbox(label="Generation id")
             favorite_status = gr.Textbox(label="Favorite", interactive=False)
-            gr.Button("Refresh").click(_history, outputs=history)
+            gr.Button("Refresh").click(_history, inputs=session_state, outputs=history)
             gr.Button("Favorite").click(
                 _favorite_generation,
-                inputs=favorite_id,
+                inputs=[favorite_id, session_state],
                 outputs=favorite_status,
             )
 

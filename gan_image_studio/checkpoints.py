@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
 
 import torch
 
@@ -16,6 +16,17 @@ class CheckpointMetadata:
     path: Path
     sha256: str
     size_bytes: int
+
+
+class CheckpointPayload(TypedDict):
+    generator: dict[str, Any]
+    discriminator: dict[str, Any]
+    generator_optimizer: dict[str, Any]
+    discriminator_optimizer: dict[str, Any]
+    model_config: dict[str, int]
+    epoch: int
+    step: int
+    metrics: dict[str, float]
 
 
 def save_checkpoint(
@@ -31,7 +42,7 @@ def save_checkpoint(
     metrics: dict[str, float],
 ) -> CheckpointMetadata:
     ensure_directory(path.parent)
-    payload = {
+    payload: CheckpointPayload = {
         "generator": generator_state,
         "discriminator": discriminator_state,
         "generator_optimizer": generator_optimizer_state,
@@ -48,10 +59,9 @@ def save_checkpoint(
     return CheckpointMetadata(path=path, sha256=file_sha256(path), size_bytes=path.stat().st_size)
 
 
-def load_checkpoint(path: Path, map_location: str | torch.device = "cpu") -> dict[str, Any]:
+def load_checkpoint(path: Path, map_location: str | torch.device = "cpu") -> CheckpointPayload:
     checkpoint = torch.load(path, map_location=map_location, weights_only=False)
-    _validate_payload(checkpoint)
-    return checkpoint
+    return _validate_payload(checkpoint)
 
 
 def validate_checkpoint(path: Path) -> None:
@@ -59,7 +69,7 @@ def validate_checkpoint(path: Path) -> None:
     _validate_payload(checkpoint)
 
 
-def _validate_payload(payload: object) -> None:
+def _validate_payload(payload: object) -> CheckpointPayload:
     if not isinstance(payload, dict):
         raise ValueError("checkpoint payload must be a dictionary")
     required = {
@@ -75,3 +85,13 @@ def _validate_payload(payload: object) -> None:
     missing = sorted(required.difference(payload))
     if missing:
         raise ValueError(f"checkpoint is missing keys: {', '.join(missing)}")
+    return {
+        "generator": payload["generator"],
+        "discriminator": payload["discriminator"],
+        "generator_optimizer": payload["generator_optimizer"],
+        "discriminator_optimizer": payload["discriminator_optimizer"],
+        "model_config": payload["model_config"],
+        "epoch": payload["epoch"],
+        "step": payload["step"],
+        "metrics": payload["metrics"],
+    }
