@@ -22,6 +22,7 @@ Function.
 
    ```bash
    npm run verify:supabase
+   supabase test db supabase/tests --local
    ```
 
 The local config defines these private buckets:
@@ -63,6 +64,8 @@ the project to become ready, links the CLI, pushes migrations, and deploys the
   public tables to the Data API automatically.
 - Users can read and write only their own private generations.
 - Public experiment visibility is controlled by `experiments.is_public`.
+- Training sample grids are registered in `training_sample_grids` and follow the
+  parent experiment visibility.
 - Checkpoint storage has no authenticated upload policy. Checkpoint upload is a
   backend-only path through the service role or the `checkpoint-upload` Edge
   Function.

@@ -94,6 +94,7 @@ uv run ruff check .
 uv run pytest
 npm run typecheck:scripts
 npm run verify:supabase
+supabase test db supabase/tests --local
 ```
 
 ## Supabase
@@ -114,6 +115,7 @@ Tables:
 - `experiments`
 - `experiment_metrics`
 - `model_checkpoints`
+- `training_sample_grids`
 - `generations`
 - `generation_favorites`
 - `evaluation_reports`
@@ -127,7 +129,9 @@ Storage buckets:
 
 All public tables enable RLS and include explicit Data API grants. Private
 generations are visible only to their owner. Public experiments must be
-published through `experiments.is_public`. Checkpoint uploads are backend-only.
+published through `experiments.is_public`. Training sample grids are recorded in
+`training_sample_grids` and follow the parent experiment visibility. Checkpoint
+uploads are backend-only.
 
 ## Evaluation
 
@@ -143,9 +147,11 @@ executed and the artifacts are committed or linked.
 
 ## Results
 
-No final model quality result is claimed yet. Run a real training job, inspect
+Repository verification has been run with a synthetic folder dataset in quick
+CPU mode to prove checkpointing, resume, and generation behavior. No final model
+quality result is claimed yet. Run a real CIFAR-10 training job, inspect
 TensorBoard, review sample grids over time, and compute FID with enough samples
-before writing conclusions.
+before writing quality conclusions.
 
 ## Dataset License
 

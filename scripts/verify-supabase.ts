@@ -5,6 +5,7 @@ const requiredTables = [
   "experiments",
   "experiment_metrics",
   "model_checkpoints",
+  "training_sample_grids",
   "generations",
   "generation_favorites",
   "evaluation_reports",
@@ -70,6 +71,7 @@ async function main(): Promise<void> {
     ?? "supabase/migrations/20260618220129_init_gan_image_studio_schema.sql";
   const migration = readFileSync(migrationPath, "utf8");
   const config = readFileSync("supabase/config.toml", "utf8");
+  const pgtap = readFileSync("supabase/tests/schema_rls_test.sql", "utf8");
 
   for (const table of requiredTables) {
     assertIncludes(migration, `create table public.${table}`, `table ${table}`);
@@ -87,6 +89,8 @@ async function main(): Promise<void> {
 
   assertIncludes(migration, "schema app_private", "private schema for privileged functions");
   assertIncludes(migration, "model-checkpoints", "private checkpoint bucket");
+  assertIncludes(pgtap, "training_sample_grids", "pgTAP training grid coverage");
+  assertIncludes(pgtap, "relrowsecurity", "pgTAP RLS catalog checks");
   await verifyRemoteRest();
   await verifyManagementProject();
   console.log("Supabase verification checks passed.");

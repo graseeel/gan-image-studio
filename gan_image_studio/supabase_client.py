@@ -6,6 +6,7 @@ from typing import Any
 
 from gan_image_studio.checkpoints import CheckpointMetadata
 from gan_image_studio.storage import ArtifactStore, SupabaseArtifactStore
+from gan_image_studio.utils import file_sha256
 
 
 @dataclass(frozen=True)
@@ -134,7 +135,72 @@ class SupabaseGateway:
             raise RuntimeError("checkpoint insert returned no data")
         return dict(response.data[0])
 
+    def register_sample_grid(
+        self,
+        local_path: Path,
+        *,
+        experiment_id: str,
+        owner_id: str,
+        epoch: int,
+        step: int,
+    ) -> dict[str, Any]:
+        if self.service_client is None:
+            raise PermissionError("service role key is required to register sample grids")
+        if self.service_artifacts is None:
+            raise PermissionError("service artifact store is required to register sample grids")
+        if not local_path.is_file():
+            raise FileNotFoundError(local_path)
+        remote_path = f"{owner_id}/training-samples/{local_path.name}"
+        self.service_artifacts.upload_file(local_path, "training-samples", remote_path)
+        payload = {
+            "experiment_id": experiment_id,
+            "owner_id": owner_id,
+            "storage_bucket": "training-samples",
+            "storage_path": remote_path,
+            "epoch": epoch,
+            "step": step,
+            "sha256": file_sha256(local_path),
+            "size_bytes": local_path.stat().st_size,
+        }
+        response = self.service_client.table("training_sample_grids").insert(payload).execute()
+        if not response.data:
+            raise RuntimeError("sample grid insert returned no data")
+        return dict(response.data[0])
+
     def upload_generated_grid(self, local_path: Path, user_id: str) -> str:
         remote_path = f"{user_id}/generations/{local_path.name}"
         self.user_artifacts.upload_file(local_path, "generated-images", remote_path)
         return remote_path
+
+
+@dataclass(frozen=True)
+class SupabaseTrainingRegistry:
+    gateway: SupabaseGateway
+    experiment_id: str
+    owner_id: str
+
+    def register_checkpoint(
+        self,
+        checkpoint: CheckpointMetadata,
+        *,
+        epoch: int,
+        step: int,
+        metrics: dict[str, float],
+    ) -> None:
+        self.gateway.register_checkpoint(
+            checkpoint,
+            experiment_id=self.experiment_id,
+            owner_id=self.owner_id,
+            epoch=epoch,
+            step=step,
+            metrics=metrics,
+        )
+
+    def register_sample_grid(self, path: Path, *, epoch: int, step: int) -> None:
+        self.gateway.register_sample_grid(
+            path,
+            experiment_id=self.experiment_id,
+            owner_id=self.owner_id,
+            epoch=epoch,
+            step=step,
+        )

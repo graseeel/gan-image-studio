@@ -82,6 +82,20 @@ create table public.model_checkpoints (
   unique (storage_bucket, storage_path)
 );
 
+create table public.training_sample_grids (
+  id uuid primary key default gen_random_uuid(),
+  experiment_id uuid not null references public.experiments(id) on delete cascade,
+  owner_id uuid not null references auth.users(id) on delete cascade,
+  storage_bucket text not null default 'training-samples',
+  storage_path text not null,
+  epoch integer not null check (epoch >= 0),
+  step integer not null check (step >= 0),
+  sha256 text not null check (length(sha256) = 64),
+  size_bytes bigint not null check (size_bytes > 0),
+  created_at timestamptz not null default now(),
+  unique (storage_bucket, storage_path)
+);
+
 create table public.generations (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -135,6 +149,7 @@ alter table public.profiles enable row level security;
 alter table public.experiments enable row level security;
 alter table public.experiment_metrics enable row level security;
 alter table public.model_checkpoints enable row level security;
+alter table public.training_sample_grids enable row level security;
 alter table public.generations enable row level security;
 alter table public.generation_favorites enable row level security;
 alter table public.evaluation_reports enable row level security;
@@ -144,6 +159,7 @@ grant usage on schema public to anon, authenticated, service_role;
 grant select on public.experiments to anon;
 grant select on public.experiment_metrics to anon;
 grant select on public.model_checkpoints to anon;
+grant select on public.training_sample_grids to anon;
 grant select on public.generations to anon;
 grant select on public.evaluation_reports to anon;
 
@@ -151,6 +167,7 @@ grant select, insert, update on public.profiles to authenticated;
 grant select, insert, update, delete on public.experiments to authenticated;
 grant select, insert, update, delete on public.experiment_metrics to authenticated;
 grant select on public.model_checkpoints to authenticated;
+grant select on public.training_sample_grids to authenticated;
 grant select, insert, update, delete on public.generations to authenticated;
 grant select, insert, delete on public.generation_favorites to authenticated;
 grant select, insert, update, delete on public.evaluation_reports to authenticated;
@@ -159,6 +176,7 @@ grant all on public.profiles to service_role;
 grant all on public.experiments to service_role;
 grant all on public.experiment_metrics to service_role;
 grant all on public.model_checkpoints to service_role;
+grant all on public.training_sample_grids to service_role;
 grant all on public.generations to service_role;
 grant all on public.generation_favorites to service_role;
 grant all on public.evaluation_reports to service_role;
@@ -249,6 +267,17 @@ using (
 
 create policy "checkpoints follow experiment visibility"
 on public.model_checkpoints for select
+to anon, authenticated
+using (
+  exists (
+    select 1 from public.experiments e
+    where e.id = experiment_id
+      and (e.is_public or e.owner_id = (select auth.uid()))
+  )
+);
+
+create policy "training grids follow experiment visibility"
+on public.training_sample_grids for select
 to anon, authenticated
 using (
   exists (

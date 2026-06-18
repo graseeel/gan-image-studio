@@ -8,6 +8,7 @@ TABLES = [
     "experiments",
     "experiment_metrics",
     "model_checkpoints",
+    "training_sample_grids",
     "generations",
     "generation_favorites",
     "evaluation_reports",
@@ -53,3 +54,20 @@ def test_checkpoint_upload_is_backend_only() -> None:
     assert "model-checkpoints" in sql
     assert "users upload their generated images" in sql
     assert "upload their model-checkpoints" not in sql
+
+
+def test_private_generation_and_public_experiment_policies_are_scoped() -> None:
+    sql = MIGRATION.read_text(encoding="utf-8")
+
+    assert "using (not is_private or (select auth.uid()) = user_id)" in sql
+    assert "using (is_public or (select auth.uid()) = owner_id)" in sql
+    assert "training grids follow experiment visibility" in sql
+
+
+def test_training_sample_grids_are_backend_recorded() -> None:
+    sql = MIGRATION.read_text(encoding="utf-8")
+
+    assert "create table public.training_sample_grids" in sql
+    assert "storage_bucket text not null default 'training-samples'" in sql
+    assert "grant select on public.training_sample_grids to authenticated" in sql
+    assert "grant all on public.training_sample_grids to service_role" in sql

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -9,7 +8,7 @@ from typing import Any
 import torch
 
 from gan_image_studio.config import ModelConfig
-from gan_image_studio.utils import ensure_directory
+from gan_image_studio.utils import ensure_directory, file_sha256
 
 
 @dataclass(frozen=True)
@@ -17,14 +16,6 @@ class CheckpointMetadata:
     path: Path
     sha256: str
     size_bytes: int
-
-
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def save_checkpoint(
@@ -54,7 +45,7 @@ def save_checkpoint(
     torch.save(payload, tmp_path)
     validate_checkpoint(tmp_path)
     os.replace(tmp_path, path)
-    return CheckpointMetadata(path=path, sha256=_sha256(path), size_bytes=path.stat().st_size)
+    return CheckpointMetadata(path=path, sha256=file_sha256(path), size_bytes=path.stat().st_size)
 
 
 def load_checkpoint(path: Path, map_location: str | torch.device = "cpu") -> dict[str, Any]:

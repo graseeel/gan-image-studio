@@ -29,3 +29,5 @@ jobs:
         run: npm install
       - name: Type-check scripts
         run: npm run typecheck:scripts
+      - name: Verify Supabase assets
+        run: npm run verify:supabase
