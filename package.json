@@ -6,6 +6,8 @@
   "scripts": {
     "provision:supabase": "tsx scripts/provision-supabase.ts",
     "verify:supabase": "tsx scripts/verify-supabase.ts",
+    "verify:site": "node scripts/verify-site.mjs",
+    "serve:site": "python3 -m http.server 4173 --directory site",
     "typecheck:scripts": "tsc --noEmit"
   },
   "devDependencies": {

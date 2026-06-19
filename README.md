@@ -87,12 +87,19 @@ Run the Gradio UI:
 uv run gan-studio ui
 ```
 
+Open the portfolio site:
+
+```bash
+npm run serve:site
+```
+
 Verify:
 
 ```bash
 uv run ruff check .
 uv run pytest
 npm run typecheck:scripts
+npm run verify:site
 npm run verify:supabase
 supabase test db supabase/tests --local
 ```
