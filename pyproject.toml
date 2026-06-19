@@ -7,7 +7,7 @@ name = "gan-image-studio"
 version = "0.1.0"
 description = "A reproducible DCGAN training studio with Supabase-backed artifact tracking."
 readme = "README.md"
-requires-python = ">=3.11,<3.15"
+requires-python = ">=3.11,<3.14"
 license = "MIT"
 authors = [{ name = "Gabriel Grasele" }]
 dependencies = [

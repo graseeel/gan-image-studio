@@ -45,6 +45,10 @@ uv sync --extra dev
 npm install
 ```
 
+The repository pins Python 3.12 through `.python-version`. If `gan-studio`
+cannot import `gan_image_studio`, rerun `uv sync --extra dev` to rebuild a
+stale virtual environment.
+
 Inspect a folder dataset:
 
 ```bash
